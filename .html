@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance System with Face Recognition</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            text-align: center;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        .container h1 {
+            margin-bottom: 20px;
+        }
+        .container a, .container input[type="submit"], .container button {
+            display: block;
+            margin: 10px 0;
+            padding: 10px 20px;
+            text-decoration: none;
+            color: #fff;
+            background-color: #007bff;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+            border: none;
+            cursor: pointer;
+        }
+        .container a:hover, .container input[type="submit"]:hover, .container button:hover {
+            background-color: #0056b3;
+        }
+        .container input[type="text"], .container input[type="password"],
+        .container input[type="number"], .container select {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        .hidden {
+            display: none;
+        }
+        label {
+            display: block;
+            text-align: left;
+            margin: 10px 0 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container" id="attendanceContainer">
+        <h1>Attendance</h1>
+        <a href="#" onclick="showLogin()">Log in</a>
+        <a href="#" onclick="showSignup()">Sign up</a>
+    </div>
+
+    <div class="container hidden" id="loginContainer">
+        <h1>Log in</h1>
+        <p>Face recognition will be used to verify your identity.</p>
+        <video id="videoLogin" autoplay muted></video>
+        <canvas id="overlayLogin"></canvas>
+        <button id="verifyLogin">Verify Face</button>
+        <p>Or log in with your password:</p>
+        <form id="passwordLoginForm" method="post"  action="https://formspree.io/f/mdkapzyb">
+            <label for="loginRollNo">Roll No</label>
+            <input type="text" id="loginRollNo" placeholder="Roll No" required>
+            <label for="loginPassword">Password</label>
+            <input type="password" id="loginPassword" placeholder="Password" required>
+            <input type="submit" value="Log in">
+        </form>
+        <p id="statusLogin">Loading...</p>
+        <a href="#" onclick="showAttendance()">Back to Attendance</a>
+    </div>
+
+    <div class="container hidden" id="signupContainer">
+        <h1>Sign up</h1>
+        <form id="signupForm" method="post"  action="https://formspree.io/f/mdkapzyb">
+            <label for="name">Name</label>
+            <input type="text" id="name" placeholder="Name" required>
+            <label for="rollNo">Roll No</label>
+            <input type="text" id="rollNo" placeholder="Roll No" required>
+            <label for="password">Password</label>
+            <input type="password" id="password" placeholder="Password" required>
+            <label for="department">Department</label>
+            <select id="department" required>
+                <option value="">Select Department</option>
+                <option value="Computer Science">Computer Science</option>
+                <option value="Mechanical Engineering">Mechanical Engineering</option>
+            </select>
+            <label for="year">Year</label>
+            <select id="year" required>
+                <option value="">Select Year</option>
+                <option value="I">I</option>
+                <option value="II">II</option>
+                <option value="III">III</option>
+                <option value="IV">IV</option>
+            </select>
+            <input type="button" value="Next: Capture Face" onclick="showFaceRecognitionSignup()">
+        </form>
+        <a href="#" onclick="showAttendance()">Back to Attendance</a>
+    </div>
+
+    <div class="container hidden" id="faceRecognitionSignupContainer">
+        <h1>Face Recognition - Signup</h1>
+        <video id="videoSignup" autoplay muted></video>
+        <canvas id="overlaySignup"></canvas>
+        <button id="captureSignup">Capture & Save Face</button>
+        <p id="statusSignup">Loading...</p>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
+    <script>
+        let users = JSON.parse(localStorage.getItem('users')) || [];
+
+        // Navigation functions
+        function showLogin() {
+            document.getElementById('attendanceContainer').classList.add('hidden');
+            document.getElementById('loginContainer').classList.remove('hidden');
+            startFaceRecognition('login');
+        }
+
+        function showSignup() {
+            document.getElementById('attendanceContainer').classList.add('hidden');
+            document.getElementById('signupContainer').classList.remove('hidden');
+        }
+
+        function showAttendance() {
+            document.getElementById('loginContainer').classList.add('hidden');
+            document.getElementById('signupContainer').classList.add('hidden');
+            document.getElementById('faceRecognitionSignupContainer').classList.add('hidden');
+            document.getElementById('attendanceContainer').classList.remove('hidden');
+        }
+
+        function showFaceRecognitionSignup() {
+            document.getElementById('signupContainer').classList.add('hidden');
+            document.getElementById('faceRecognitionSignupContainer').classList.remove('hidden');
+            startFaceRecognition('signup');
+        }
+
+        // Save user data
+        function saveUserData(descriptor) {
+            const name = document.getElementById('name').value;
+            const rollNo = document.getElementById('rollNo').value;
+            const password = document.getElementById('password').value;
+            const department = document.getElementById('department').value;
+            const year = document.getElementById('year').value;
+
+            const newUser = { name, rollNo, password, department, year, descriptor };
+            users.push(newUser);
+            localStorage.setItem('users', JSON.stringify(users));
+            alert('Signup completed successfully!');
+            showAttendance();
+        }
+
+        // Verify user login
+        function verifyFaceLogin(descriptor) {
+            for (const user of users) {
+                const distance = faceapi.euclideanDistance(user.descriptor, descriptor);
+                if (distance < 0.6) {
+                    alert(`Login successful! Welcome, ${user.name}`);
+                    return;
+                }
+            }
+            alert('Face not recognized. Please try again.');
+        }
+
+        // Face Recognition Functions
+        async function startFaceRecognition(mode) {
+            const video = mode === 'signup' ? document.getElementById('videoSignup') : document.getElementById('videoLogin');
+            const overlay = mode === 'signup' ? document.getElementById('overlaySignup') : document.getElementById('overlayLogin');
+            const statusText = mode === 'signup' ? document.getElementById('statusSignup') : document.getElementById('statusLogin');
+            const captureButton = mode === 'signup' ? document.getElementById('captureSignup') : document.getElementById('verifyLogin');
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+            } catch (err) {
+                console.error('Error accessing webcam:', err);
+                statusText.textContent = 'Error accessing webcam.';
+                return;
+            }
+
+            await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
+            await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
+            await faceapi.nets.faceRecognitionNet.loadFromUri('/models');
+
+            statusText.textContent = 'Models loaded. Ready to capture.';
+
+            captureButton.onclick = async () => {
+                overlay.width = video.videoWidth;
+                overlay.height = video.videoHeight;
+                const context = overlay.getContext('2d');
+                context.drawImage(video, 0, 0, overlay.width, overlay.height);
+
+                const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+                    .withFaceLandmarks()
+                    .withFaceDescriptors();
+
+                if (detections.length > 0) {
+                    const descriptor = detections[0].descriptor;
+                    if (mode === 'signup') saveUserData(descriptor);
+                    else verifyFaceLogin(descriptor);
+                } else {
+                    statusText.textContent = 'No face detected. Try again.';
+                }
+            };
+        }
+
+        // Password login
+        document.getElementById('passwordLoginForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const rollNo = document.getElementById('loginRollNo').value;
+            const password = document.getElementById('loginPassword').value;
+
+            const user = users.find((user) => user.rollNo === rollNo && user.password === password);
+            if (user) alert(`Login successful! Welcome, ${user.name}`);
+            else alert('Invalid Roll No or Password. Try again.');
+        });
+    </script>
+</body>
+</html>
